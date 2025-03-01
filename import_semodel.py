@@ -37,13 +37,11 @@ def load(self, context, filepath=""):
         material_color_map = new_mat.node_tree.nodes.new("ShaderNodeTexImage")
 
         try:
-            material_color_map.image = bpy.data.images.load(
-                __build_image_path__(filepath, mat.inputData.diffuseMap))
+            material_color_map.image = bpy.data.images.load(__build_image_path__(filepath, mat.inputData.diffuseMap))
         except RuntimeError:
             pass
 
-        new_mat.node_tree.links.new(
-            bsdf_shader.inputs["Base Color"], material_color_map.outputs["Color"])
+        new_mat.node_tree.links.new(bsdf_shader.inputs["Base Color"], material_color_map.outputs["Color"])
 
         mesh_mats.append(new_mat)
 
@@ -56,8 +54,7 @@ def load(self, context, filepath=""):
 
         vertex_uv_layers = []
         for uvLayer in range(mesh.matReferenceCount):
-            vertex_uv_layers.append(
-                blend_mesh.loops.layers.uv.new("UVSet_%d" % uvLayer))
+            vertex_uv_layers.append(blend_mesh.loops.layers.uv.new("UVSet_%d" % uvLayer))
 
         for vert_idx, vert in enumerate(mesh.vertices):
             blend_mesh.verts.new(Vector(vert.position))
@@ -77,26 +74,22 @@ def load(self, context, filepath=""):
         def setup_face_vert(bm_face):
             for loop_idx, loop in enumerate(bm_face.loops):
                 vert_idx = face.indices[face_index_map[loop_idx]]
-
                 # Build buffer of normals
                 vertex_normal_buffer.append(mesh.vertices[vert_idx].normal)
-
                 # Assign vertex uv layers
                 for uvLayer in range(mesh.matReferenceCount):
                     # Blender also has pathetic uv layout
                     uv = Vector(mesh.vertices[vert_idx].uvLayers[uvLayer])
                     uv.y = 1.0 - uv.y
-
                     # Set the UV to the layer
                     loop[vertex_uv_layers[uvLayer]].uv = uv
-
                 # Assign vertex colors
                 loop[vertex_color_layer] = mesh.vertices[vert_idx].color
 
         for face in mesh.faces:
             indices = [blend_mesh.verts[face.indices[0]],
-                       blend_mesh.verts[face.indices[2]], blend_mesh.verts[face.indices[1]]]
-
+                       blend_mesh.verts[face.indices[2]],
+                       blend_mesh.verts[face.indices[1]]]
             try:
                 new_face = blend_mesh.faces.new(indices)
             except ValueError:
@@ -107,26 +100,16 @@ def load(self, context, filepath=""):
         blend_mesh.to_mesh(new_mesh)
 
         # Begin vertex normal assignment logic
-        new_mesh.create_normals_split()
-
-        for loop_idx, loop in enumerate(new_mesh.loops):
-            new_mesh.loops[loop_idx].normal = vertex_normal_buffer[loop_idx]
+        new_mesh.update(calc_edges=True)
+        for poly in new_mesh.polygons:
+            poly.use_smooth = True
+        new_mesh.normals_split_custom_set(vertex_normal_buffer)
+        # In Blender 4.3, the use_auto_smooth property is removed.
 
         new_mesh.validate(clean_customdata=False)
 
-        clnors = array.array('f', [0.0] * (len(new_mesh.loops) * 3))
-        new_mesh.loops.foreach_get("normal", clnors)
-
-        # Enable smoothing - must be BEFORE normals_split_custom_set, etc.
-        polygon_count = len(new_mesh.polygons)
-        new_mesh.polygons.foreach_set("use_smooth", [True] * polygon_count)
-
-        new_mesh.normals_split_custom_set(tuple(zip(*(iter(clnors),) * 3)))
-        new_mesh.use_auto_smooth = True
-
         # Add the mesh to the scene
-        obj = bpy.data.objects.new("%s_%s" % (
-            model_name, new_mesh.name), new_mesh)
+        obj = bpy.data.objects.new("%s_%s" % (model_name, new_mesh.name), new_mesh)
         mesh_objs.append(obj)
 
         # Apply mesh materials
@@ -135,8 +118,7 @@ def load(self, context, filepath=""):
                 continue
             obj.data.materials.append(mesh_mats[mat_index])
 
-        bpy.context.view_layer.active_layer_collection.collection.objects.link(
-            obj)
+        bpy.context.view_layer.active_layer_collection.collection.objects.link(obj)
         bpy.context.view_layer.objects.active = obj
 
         # Create vertex groups for weights
@@ -150,8 +132,7 @@ def load(self, context, filepath=""):
     skel_obj = bpy.data.objects.new("%s_skel" % model_name, armature)
     skel_obj.show_in_front = True
 
-    bpy.context.view_layer.active_layer_collection.collection.objects.link(
-        skel_obj)
+    bpy.context.view_layer.active_layer_collection.collection.objects.link(skel_obj)
     bpy.context.view_layer.objects.active = skel_obj
 
     # Begin edit mode
@@ -190,15 +171,13 @@ def load(self, context, filepath=""):
     bone_vis = bpy.context.active_object
     bone_vis.data.name = bone_vis.name = "semodel_bone_vis"
     bone_vis.use_fake_user = True
-    bpy.context.view_layer.active_layer_collection.collection.objects.unlink(
-        bone_vis)
+    bpy.context.view_layer.active_layer_collection.collection.objects.unlink(bone_vis)
     bpy.context.view_layer.objects.active = skel_obj
 
     # Calculate armature dimensions...
     maxs = [0, 0, 0]
     mins = [0, 0, 0]
 
-    j = 0
     for bone in armature.bones:
         for i in range(3):
             maxs[i] = max(maxs[i], bone.head_local[i])

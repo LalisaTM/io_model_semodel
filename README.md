@@ -1,4 +1,4 @@
-# io_model_semodel - SEModel Plugin for Blender (2.80) (DEPRECATED)
+# io_model_semodel - SEModel Plugin for Blender (updated to work with blender 4.3.0)
 
 # NOTICE: SEModels are now DEPRECATED. Cast is the newly supported model format.
 
